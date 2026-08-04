@@ -1115,7 +1115,14 @@ class GatewaySessionInvokeTest {
 
         assertEquals(0, invokeCalls.get())
         assertEquals(false, result["ok"]?.jsonPrimitive?.content?.toBooleanStrict())
-        assertEquals("TIMEOUT", result["error"]?.jsonObject?.get("code")?.jsonPrimitive?.content)
+        assertEquals(
+          "TIMEOUT",
+          result["error"]
+            ?.jsonObject
+            ?.get("code")
+            ?.jsonPrimitive
+            ?.content,
+        )
       } finally {
         shutdownHarness(harness, server)
       }
@@ -1170,6 +1177,7 @@ class GatewaySessionInvokeTest {
       val connected = CompletableDeferred<Unit>()
       val requests = Channel<GatewaySession.InvokeRequest>(capacity = 2)
       val lastDisconnect = AtomicReference("")
+
       fun startServer(protocolFeaturesResponse: ProtocolFeaturesResponse): MockWebServer =
         startGatewayServer(json) { webSocket, id, method, _ ->
           when (method) {

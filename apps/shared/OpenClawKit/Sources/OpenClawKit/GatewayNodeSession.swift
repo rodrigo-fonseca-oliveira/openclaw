@@ -1321,16 +1321,20 @@ extension GatewayNodeSession {
             command: request.command,
             paramsJSON: request.paramsJSON,
             nodeId: request.nodeId)
-        let routeBoundInvoke: @Sendable (BridgeInvokeRequest) async -> BridgeInvokeResponse = { [weak self] req in
-            guard let self else {
-                return Self.staleRouteInvokeResponse(requestId: req.id)
-            }
-            return await self.invokeIfCurrentRoute(
-                req,
-                expectedRoute: context.route,
-                onInvoke: onInvoke)
-        }
         let sessionKeyEnvelope = Self.sessionKeyEnvelope(request: request)
+        let routeBoundInvoke: @Sendable (BridgeInvokeRequest) async -> BridgeInvokeResponse = { [weak self] req in
+            // Timeout and receipt helpers may dispatch detached tasks. Rebind the immutable
+            // envelope at the final owner callback so those hops cannot erase attribution.
+            await GatewayNodeInvokeContext.$sessionKeyEnvelope.withValue(sessionKeyEnvelope) {
+                guard let self else {
+                    return Self.staleRouteInvokeResponse(requestId: req.id)
+                }
+                return await self.invokeIfCurrentRoute(
+                    req,
+                    expectedRoute: context.route,
+                    onInvoke: onInvoke)
+            }
+        }
         let timeoutMs: Int
         switch Self.invokeTimeoutBudget(timeoutMs: request.timeoutMs, receivedAt: context.receivedAt) {
         case .disabled:
@@ -1345,14 +1349,12 @@ extension GatewayNodeSession {
         case let .remaining(remaining):
             timeoutMs = remaining
         }
-        let response = await GatewayNodeInvokeContext.$sessionKeyEnvelope.withValue(sessionKeyEnvelope) {
-            await self.invokeWithComputerReceipt(
-                requestPayload: request,
-                request: bridgeRequest,
-                timeoutMs: timeoutMs,
-                receiptScope: context.receiptScope,
-                onInvoke: routeBoundInvoke)
-        }
+        let response = await self.invokeWithComputerReceipt(
+            requestPayload: request,
+            request: bridgeRequest,
+            timeoutMs: timeoutMs,
+            receiptScope: context.receiptScope,
+            onInvoke: routeBoundInvoke)
         // Invoke output belongs to the requesting channel. A target switch while the device
         // command is running must discard it instead of disclosing it to the replacement.
         guard self.isCurrentRoute(context.route),

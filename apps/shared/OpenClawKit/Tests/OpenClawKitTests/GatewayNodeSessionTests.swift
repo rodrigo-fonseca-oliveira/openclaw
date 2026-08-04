@@ -2590,6 +2590,7 @@ struct GatewayNodeSessionTests {
         task.emitInvokeRequest(
             id: "expired",
             command: "mcp.tools.call.v1",
+            paramsJSON: "{}",
             timeoutMs: 10)
         try await waitUntil("expired invoke result") {
             task.sentRequestCount(method: "node.invoke.result") == 1
